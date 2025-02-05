@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Base de Datos</title>
+    <link rel="stylesheet" href="{{url_for('static', filename='style.css')}}">
+</head>
+<body>
+    <h1>Gestión de Base de Datos</h1>
+    <p>Usuario: {{current_user.id}} ({{current_user.role}})</p>
+    <p><a href="{{url_for('logout')}}">Cerrar sesión</a></p>
+
+    <!-- Sección de visualización de datos -->
+    
+    <h2>Buscar registros</h2>
+    <h3>Busqueda por campo</h3>
+    <div class="busqueda-container" id="busqueda">
+        <form action="/search" method="post" id="form-busqueda">
+            <select name="search-table" class="busqueda-tabla">
+                <option value="">Seleccione una tabla</option>
+                {% for tabla in tablas %}
+                <option value="{{tabla}}">{{tabla.capitalize()}}</option>
+                {% endfor %}
+            </select>
+            
+            <br>
+            
+            <!-- select dinamico de las columnas -->
+            <select name="search-column" class="busqueda-columna">
+                <option value="">Seleccione una tabla primero</option>
+            </select>
+            
+            <br>
+            
+            <input type="text" id="input-busqueda" name="query" placeholder="Ingresar dato" required>
+            <!-- Campo oculto para almacenar el tipo de input -->
+            <input type="hidden" id="input-type" name="input-type">
+            
+            <button type="submit">Buscar</button>
+        </form>
+    </div>
+    <h3>Busqueda historial por maquina</h3>
+    <div class="busqueda-container" id="busqueda">
+        <form action="/historial_maquina" method="post" id="form-historial-maquina">
+            <label for="query">Ingrese ID de la maquina</label>
+            <input type="text" id="input-busqueda" name="query" placeholder="Ingresar ID" required>
+            <button type="submit">Buscar</button>
+        </form>
+    </div>
+    <!-- Sección de Editor -->
+    {% if current_user.role in ['admin', 'editor'] %}
+    <h2>Cargar y Descargar Datos</h2>
+    <h3>Carga</h3>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <label for="file" id="Excel">Subir archivo Excel:</label>
+        <input type="file" name="file" id="file" required>
+        <label for="opciones-tablas" id="seleccion-tabla">Selecciona una tabla:</label>
+        <select name="tabla" id="tabla-select" aria-placeholder="Selecciona una tabla" required>
+            <option value="">Selecciona una tabla</option>
+            {% for tabla in tablas %}
+            <option value="{{tabla}}">{{tabla.capitalize()}}</option>
+            {% endfor %}
+            <option value="todas">Todas</option>
+        </select>
+        <button type="submit" onclick="mostrarSeleccion()">Subir</button>
+    </form>
+    
+    <h3>Descarga</h3>
+    <form action="/download" method="post">
+        <label for="opciones-tablas" id="seleccion-tabla">Selecciona una tabla:</label>
+        <select name="tabla" id="tabla-select" aria-placeholder="Selecciona una tabla" required>
+            <option value="">Selecciona una tabla</option>
+            {% for tabla in tablas %}
+            <option value="{{tabla}}">{{tabla.capitalize()}}</option>
+            {% endfor %}
+            <option value="todas">Todas</option>
+        </select>
+        <button type="submit">Descargar</button>
+    </form>
+    
+    <!-- <h2>Inserción</h2> -->
+    <h2>Actualizar</h2>
+    
+    <h3>Insertar Nuevo Registro</h3>
+    <div class="busqueda-container" id="insertar-elemento">
+        <form action="/insertar_registro" method="post" id="form-insertar-elemento">
+            <select name="insert-element-table" class="busqueda-tabla">
+                <option value="">Seleccione una tabla</option>
+                {% for tabla in tablas %}
+                <option value="{{tabla}}">{{tabla.capitalize()}}</option>
+                {% endfor %}
+            </select>
+            
+            <br>
+            
+            <div class="input-container"></div>
+            <!-- <input type="text" id="input-insertar-elemento" name="insert-element-data" placeholder="Ingrese nuevo campo" required> -->
+            
+            <button type="submit">Insertar</button>
+        </form>
+    </div>
+    
+    <h3>Actualizar Registro</h3>
+    <div class="busqueda-container" id="actualizar-elemento">
+        <form action="/actualizar_registro" method="post" id="form-actualizar-elemento">
+            <select name="update-element-table" class="busqueda-tabla">
+                <option value="">Seleccione una tabla</option>
+                {% for tabla in tablas %}
+                <option value="{{tabla}}">{{tabla.capitalize()}}</option>
+                {% endfor %}
+            </select>
+            
+            <br>
+            
+            <input type="number" id="input-actualizar-elemento-id" name="update-element-id" placeholder="Ingresar ID" required>
+            
+            <div class="input-container"></div>
+            <!-- <input type="text" id="input-actualizar-elemento" name="update-element-data" placeholder="Ingrese nuevo campo" required> -->
+            
+            <button type="submit">Actualizar</button>
+        </form>
+    </div>
+    {% endif %}
+    <!-- Sección de Administrador -->
+
+    {% if current_user.role == 'admin' %}
+    <h2>Modificar Tabla</h2>
+    <h3>Insertar Nuevo Campo</h3>
+    <div class="busqueda-container" id="insertar-campo">
+        <form action="/insertar_campo" method="post" id="form-insertar">
+            <select name="insert-table" id="insertar-tabla">
+                <option value="">Seleccione una tabla</option>
+                {% for tabla in tablas %}
+            <option value="{{tabla}}">{{tabla.capitalize()}}</option>
+            {% endfor %}
+        </select>
+        
+        <br>
+        
+        <input type="text" id="input-insertar" name="insert-data" placeholder="Ingrese nuevo campo" required>
+        
+        <select name="insert-type" id="tipo-campo">
+            <option value="">Seleccione el tipo de dato</option>
+            <option value="text">Texto</option>
+            <option value="number">Número</option>
+            <option value="date">Fecha</option>
+            <option value="datetime">Fecha y hora</option>
+            <option value="booleano">Booleano</option>
+            <option value="decimal">Decimal</option>
+        </select>
+        
+        <button type="submit">Insertar</button>
+        </form>
+    </div>
+
+
+    <h2>Eliminar</h2>
+
+    <h3>Eliminar Campo</h3>
+    <div class="busqueda-container" id="eliminar-campo">
+        <form action="/eliminar_campo" method="post" id="form-eliminar">
+            <select name="delete-table" class="busqueda-tabla">
+                <option value="">Seleccione una tabla</option>
+                {% for tabla in tablas %}
+                <option value="{{tabla}}">{{tabla.capitalize()}}</option>
+                {% endfor %}
+            </select>
+            
+            <br>
+            
+            <select name="delete-column" class="busqueda-columna" required>
+            <option value="">Seleccione una tabla primero</option>
+            </select>
+            
+            <br>
+
+            <input type="text" id="input-eliminar" name="delete-data" placeholder="Ingresar dato">
+            
+            <button type="submit">Eliminar</button>
+        </form>
+    </div>
+    
+    <h3>Eliminar Registro</h3>
+    <div class="busqueda-container" id="eliminar-elemento">
+        <form action="/eliminar_registro" method="post" id="form-eliminar-elemento">
+            <select name="delete-element-table" class="busqueda-tabla">
+                <option value="">Seleccione una tabla</option>
+                {% for tabla in tablas %}
+                <option value="{{tabla}}">{{tabla.capitalize()}}</option>
+                {% endfor %}
+            </select>
+            
+            <br>
+
+            <input type="number" id="input-eliminar-elemento" name="delete-element-id" placeholder="Ingresar ID">
+            
+            <button type="submit">Eliminar</button>
+        </form>
+    </div>
+
+    <h2>Mostrar historial de cambios</h2>
+    <form action="{{url_for('historial')}}" method="post" id="form-mostrar-historial">
+        <button type="submit">Mostrar historial</button>
+    </form>
+    {% endif %}
+
+    <!-- <div id="resultados">
+        <table>
+            <thead>
+                <tr id="resultados-encabezado"></tr>
+            </thead>
+            <tbody id="resultados"></tbody>
+        </table>
+    </div> -->
+    
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <ul>
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% endwith %}
+    
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="{{url_for('static', filename='script.js')}}"></script>
+</body>
+</html>

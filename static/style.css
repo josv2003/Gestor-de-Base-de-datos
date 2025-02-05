@@ -1,0 +1,61 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+h1, h2 {
+    color: #333;
+}
+form {
+    margin-bottom: 20px;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: left;
+}
+th {
+    background-color: #f4f4f4;
+}
+
+label {
+    display: block;
+    margin-bottom: 10px;
+}
+
+button {
+    display: block;
+    margin-top: 10px;
+}
+
+#id {
+    width: 50px;
+}
+
+/* #opciones-tablas {
+    display: inline-block;
+    margin-bottom: 10px;
+}
+
+#seleccion-tabla {
+    display: inline-block;
+    margin-left: 10px; /* Ajusta este valor según sea necesario */
+/* } */ 
+
+
+/* LOGIN */
+
+.alert alert-danger {
+    color: red;
+}
+
+.alert alert-success {
+    color: green;
+}
+
+.alert alert-warning {
+    color: orange;
+}

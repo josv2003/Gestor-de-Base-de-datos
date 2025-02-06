@@ -5,7 +5,7 @@ from datetime import datetime
 from functools import wraps
 from io import BytesIO
 import pandas as pd
-import mysql.connector
+import pyodbc
 import json
 import webbrowser
 
@@ -25,13 +25,33 @@ usuarios = {
     'viewer_user': {'password': 'viewer123', "role": "visualizador"}
 }
 
-# Configuración de la base de datos
+# Configuración de la base de datos (SQL Server)
 DB_CONFIG = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'yisus2003',
-    'database': 'idea_db'
+    'DRIVER': '{SQL Server}',
+    'SERVER': 'SRVSAP01',    #nombre o IP del servidor
+    'DATABASE': 'idea_db',      #nombre base de datos
+    'UID': 'TERMODINAMICA\sap-admin',        #Usuario de SQL Server
+    'PWD': 'tu_contraseña'      #Contraseña
 }
+
+def get_connection():
+    """Arma la cadena de conexión y retorna una conexion pyodbc"""
+
+    conn_str = (
+        f"DRIVER={DB_CONFIG['DRIVER']};"
+        f"SERVER={DB_CONFIG['SERVER']};"
+        f"DATABASE={DB_CONFIG['DATABASE']};"
+        f"UID={DB_CONFIG['UID']};"
+        f"PWD={DB_CONFIG['PWD']};"
+    )
+
+    return pyodbc.connect(conn_str)
+
+def row_to_disc_list(cursor):
+    """COnvierte las filas del cursor en una lista de diccionarios"""
+
+    columns = [col[0] for col in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
 #================================================================================================
 # MODELO DE USUARIO
 #================================================================================================
@@ -67,35 +87,37 @@ def roles_required(roles):
         return decorated_function
     return decorator
 
-
-
 #================================================================================================
 # FUNCIONES EXTRAS
 #================================================================================================
 def obtener_nombre_columnas(tabla):
-    QUERY_OBTENER_COLUMNAS = f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{tabla}' AND TABLE_SCHEMA = 'idea_db' ORDER BY ORDINAL_POSITION;"
-    connection = mysql.connector.connect(**DB_CONFIG)
+    QUERY_OBTENER_COLUMNAS = f"""
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = ? AND TABLE_SCHEMA = 'dbo' 
+        ORDER BY ORDINAL_POSITION;
+    """
+    connection = get_connection()
     cursor = connection.cursor()
     
-    cursor.execute(QUERY_OBTENER_COLUMNAS)
+    cursor.execute(QUERY_OBTENER_COLUMNAS, (tabla,))
     columnas_cursor = cursor.fetchall()
     columnas = [str(columna[0]) for columna in columnas_cursor]
     
+    cursor.close()
+    connection.close()
     return columnas
 
 def actualizar_historial_de_cambios(valores, cursor):
     fecha = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     usuario = session["username"]
-    QUERY_INSERTAR_CAMBIO = f"""INSERT INTO historial_de_cambios 
-                                (usuario, fecha, tipo, tabla_afectada, ID_afectado, columna_afectada) 
-                                VALUES (%s, %s, %s, %s, %s, %s);"""
-    valores.insert(1, fecha)
-    valores.insert(0, usuario)
-    print(QUERY_INSERTAR_CAMBIO, tuple(valores))
-    # connection = mysql.connector.connect(**DB_CONFIG)
-    # cursor = connection.cursor()
-    
-    cursor.execute(QUERY_INSERTAR_CAMBIO, valores)
+    QUERY_INSERTAR_CAMBIO = f"""
+        INSERT INTO historial_de_cambios 
+        (usuario, fecha, tipo, tabla_afectada, ID_afectado, columna_afectada) 
+        VALUES (?, ?, ?, ?, ?, ?);
+    """
+    nuevos_valores = [usuario, fecha] + valores
+    cursor.execute(QUERY_INSERTAR_CAMBIO, nuevos_valores)
 
 def arreglar_campo(campo):
     campo_sin_espacios = campo.strip().replace(" ", "_").replace("-", "_").replace(")", "").replace("(", "").lower()
@@ -151,12 +173,19 @@ def get_type():
     tabla = request.json.get('tabla')
     columna = request.json.get('columna')
 
-    connection = mysql.connector.connect(**DB_CONFIG)
+    connection = get_connection()
     cursor = connection.cursor()
     
-    query_tipo = f"SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{tabla}' AND COLUMN_NAME = '{columna}';"
-    cursor.execute(query_tipo)
+    query_tipo = """
+        SELECT DATA_TYPE 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = ? AND COLUMN_NAME = ?;
+    """
+    cursor.execute(query_tipo, (tabla, columna))
     tipo = cursor.fetchone()[0]
+
+    cursor.close()
+    connection.close()
     
     return jsonify(tipo)
 
@@ -179,7 +208,7 @@ def upload():
         tabla_destino = request.form['tabla']  # Cambiar a tu tabla
 
         # Conectar a la base de datos
-        connection = mysql.connector.connect(**DB_CONFIG)
+        connection = get_connection()
         cursor = connection.cursor()
 
         if tabla_destino == 'todas':
@@ -190,9 +219,9 @@ def upload():
                 df.columns = [col.strip().replace(" ", "_").replace("-", "_").replace(")", "").replace("(", "") for col in df.columns]
                 
                 # Preparar consulta de inserción
-                columnas = ', '.join([f"`{col}`" for col in df.columns])
-                valores = ', '.join(['%s'] * len(df.columns))
-                insert_query = f"INSERT INTO `{sheet_name}` ({columnas}) VALUES ({valores})"
+                columnas = ', '.join([f"[{col}]" for col in df.columns])
+                valores = ', '.join(['?' for _ in df.columns])
+                insert_query = f"INSERT INTO [{sheet_name}] ({columnas}) VALUES ({valores})"
                 
                 # Insertar datos
                 for _, row in df.iterrows():
@@ -205,9 +234,9 @@ def upload():
             df.columns = [col.strip().replace(" ", "_").replace("-", "_").replace(")", "").replace("(", "") for col in df.columns]
 
             # Preparar consulta de inserción
-            columnas = ', '.join([f"`{col}`" for col in df.columns])
-            valores = ', '.join(['%s'] * len(df.columns))
-            insert_query = f"INSERT INTO `{tabla_destino}` ({columnas}) VALUES ({valores})"
+            columnas = ', '.join([f"[{col}]" for col in df.columns])
+            valores = ', '.join(['?' for _ in df.columns])
+            insert_query = f"INSERT INTO [{tabla_destino}] ({columnas}) VALUES ({valores})"
 
             # Insertar datos
             for _, row in df.iterrows():
@@ -225,10 +254,11 @@ def upload():
         flash(f'Error al procesar el archivo: {e}')
 
     finally:
-        if 'connection' in locals() and connection.is_connected():
+        try:
             cursor.close()
             connection.close()
-
+        except:
+            pass
     return redirect(url_for('index'))
 
 @app.route('/download', methods=['POST'])
@@ -236,8 +266,7 @@ def upload():
 def download():
     table_name = request.form['tabla']
     try:
-        connection = mysql.connector.connect(**DB_CONFIG)
-        cursor = connection.cursor(dictionary=True)
+        connection = get_connection()
 
         output = BytesIO()
         writer = pd.ExcelWriter(output, engine='openpyxl')
@@ -246,11 +275,11 @@ def download():
             tablas_db = ['empresas', 'personas', 'equipos']
 
             for tabla in tablas_db:
-                query = f"SELECT * FROM `{tabla}`"
+                query = f"SELECT * FROM [{tabla}]"
                 df = pd.read_sql(query, connection)
                 df.to_excel(writer, sheet_name=tabla, index=False)
         else:    
-            query = f"SELECT * FROM {table_name};"
+            query = f"SELECT * FROM [{table_name}];"
             df = pd.read_sql(query, connection)
             df.to_excel(writer, sheet_name=table_name, index=False)
 
@@ -264,10 +293,10 @@ def download():
     except Exception as e:
         flash(f'Error al descargar archivo: {e}')
     finally:
-        if 'connection' in locals() and connection.is_connected():
-            cursor.close()
+        try:
             connection.close()
-
+        except:
+            pass
     return redirect(url_for('index'))
 
 @app.route('/download_search', methods=['POST'])
@@ -320,23 +349,23 @@ def search():
         }
         
         try:
-            connection = mysql.connector.connect(**DB_CONFIG)
-            cursor = connection.cursor(dictionary=True)
+            connection = get_connection()
+            cursor = connection.cursor()
             
             if type_query == 'text':
-                query = f"SELECT * FROM {selected_table} WHERE {columna} LIKE %s"
+                query = f"SELECT * FROM [{selected_table}] WHERE [{columna}] LIKE ?"
                 cursor.execute(query, (f"%{search_query}%",))
             elif type_query == 'number':
-                query = f"SELECT * FROM {selected_table} WHERE {columna} = %s"
+                query = f"SELECT * FROM [{selected_table}] WHERE [{columna}] = ?"
                 cursor.execute(query, (search_query,))
             elif columna == 'historial':
-                query = f"SELECT * FROM historial_de_mantenimientos WHERE ID_equipo = %s"
+                query = f"SELECT * FROM historial_de_mantenimientos WHERE ID_equipo = ?"
                 cursor.execute(query, (search_query,))
             else:
-                query = f"SELECT * FROM {selected_table} WHERE {columna} = %s"
+                query = f"SELECT * FROM [{selected_table}] WHERE [{columna}] = ?"
                 cursor.execute(query, (search_query,))
             
-            results = cursor.fetchall()
+            results = row_to_disc_list(cursor)
             #Guarda los resultados en la sesion (convertidos en JSON)
             session['search_results'] = json.dumps(results, default=str)
 
@@ -344,9 +373,11 @@ def search():
             flash(f'Error al buscar: {e}')
 
         finally:
-            if 'connection' in locals() and connection.is_connected():
+            try:
                 cursor.close()
                 connection.close()
+            except:
+                pass
 
     columnas = obtener_nombre_columnas(search_params.get('selected_table', '')) if search_params.get('selected_table') else []
     
@@ -359,18 +390,20 @@ def historial():
     results = []
     columnas = obtener_nombre_columnas('historial_de_cambios')
     try:
-        connection = mysql.connector.connect(**DB_CONFIG)
+        connection = get_connection()
         cursor = connection.cursor(dictionary=True)
         
         query = "SELECT * FROM historial_de_cambios"
         cursor.execute(query)
-        results = cursor.fetchall()
+        results = row_to_disc_list(cursor)
     except Exception as e:
         flash(f'Error al obtener el historial: {e}')
     finally:
-        if 'connection' in locals() and connection.is_connected():
+        try:
             cursor.close()
             connection.close()
+        except:
+            pass
     return render_template('resultados.html', results=results, columnas=columnas)
 
 @app.route('/historial_maquina', methods=['POST'])
@@ -380,19 +413,21 @@ def historial_maquina():
     columnas = obtener_nombre_columnas('historial_de_maquinas')
     ID_maquina = request.form['query']
     try:
-        connection = mysql.connector.connect(**DB_CONFIG)
-        cursor = connection.cursor(dictionary=True)
+        connection = get_connection()
+        cursor = connection.cursor()
         
-        query = f"SELECT * FROM historial_de_maquinas WHERE ID_equipo = {ID_maquina}"
-        cursor.execute(query)
-        results = cursor.fetchall()
+        query = f"SELECT * FROM historial_de_maquinas WHERE ID_equipo = ?"
+        cursor.execute(query, (ID_maquina,))
+        results = row_to_disc_list(cursor)
 
     except Exception as e:
         flash(f'Error al obtener el historial: {e}')
     finally:
-        if 'connection' in locals() and connection.is_connected():
+        try:
             cursor.close()
             connection.close()
+        except:
+            pass
     return render_template('resultados.html', results=results, columnas=columnas)
 
 @app.route('/insertar_campo', methods=['POST'])
@@ -404,7 +439,7 @@ def insertar_campo():
     tipo = request.form['insert-type']
 
     try:
-        connection = mysql.connector.connect(**DB_CONFIG)
+        connection = get_connection()
         cursor = connection.cursor()
         if tipo == 'text':
             tipo = 'VARCHAR(255)'
@@ -419,7 +454,7 @@ def insertar_campo():
         elif tipo == 'decimal':
             tipo = 'DECIMAL(10, 2)'
 
-        query = f"ALTER TABLE {tabla} ADD {campo} {tipo};"
+        query = f"ALTER TABLE [{tabla}] ADD [{campo}] {tipo};"
         cursor.execute(query)
         
         #actualizar historial de cambios
@@ -431,9 +466,11 @@ def insertar_campo():
     except Exception as e:
         flash(f'Error al insertar campo: {e}')
     finally:
-        if 'connection' in locals() and connection.is_connected():
+        try:
             cursor.close()
             connection.close()
+        except:
+            pass
     return redirect(url_for('index'))
 
 @app.route('/eliminar_campo', methods=['POST'])
@@ -444,10 +481,10 @@ def eliminar_campo():
     campo = arreglar_campo(request.form['delete-column'])
 
     try:
-        connection = mysql.connector.connect(**DB_CONFIG)
+        connection = get_connection()
         cursor = connection.cursor()
 
-        query = f"ALTER TABLE {tabla} DROP COLUMN {campo};"
+        query = f"ALTER TABLE [{tabla}] DROP COLUMN [{campo}];"
         cursor.execute(query)
         
         #actualizar historial de cambios
@@ -459,10 +496,11 @@ def eliminar_campo():
     except Exception as e:
         flash(f'Error al eliminar campo: {e}')
     finally:
-        if 'connection' in locals() and connection.is_connected():
+        try:
             cursor.close()
             connection.close()
-
+        except:
+            pass
     return redirect(url_for('index'))
 
 @app.route('/insertar_registro', methods=['POST'])
@@ -480,19 +518,19 @@ def insertar_registro():
             columnas_insertadas.append(col)
     # valores = [request.form[col] for col in columnas]
     try:
-        connection = mysql.connector.connect(**DB_CONFIG)
+        connection = get_connection()
         cursor = connection.cursor()
 
-        columnas = ', '.join([f"`{col}`" for col in columnas_insertadas])
-        valores = ', '.join(['%s'] * len(valores_insertados))
-        query = f"INSERT INTO {tabla} ({columnas}) VALUES ({valores});"
-        print(valores)
-        print(query)
+        columnas = ', '.join([f"[{col}]" for col in columnas_insertadas])
+        valores = ', '.join(['?' for _ in valores_insertados])
+        query = f"INSERT INTO [{tabla}] ({columnas}) VALUES ({valores});"
 
         cursor.execute(query, tuple(valores_insertados))
         
         #actualizar historial de cambios
-        valores_historial = ['Insertar nuevo registro', f'{tabla}', cursor.lastrowid, None] #!!!!! ver si se puede obtener el id del registro
+        cursor.execute("SELECT SCOPE_IDENTITY();")
+        last_id = cursor.fetchone()[0]
+        valores_historial = ['Insertar nuevo registro', f'{tabla}', last_id, None] #!!!!! ver si se puede obtener el id del registro
         actualizar_historial_de_cambios(valores_historial, cursor)
 
         connection.commit()
@@ -500,10 +538,11 @@ def insertar_registro():
     except Exception as e:
         flash(f'Error al insertar registro: {e}')
     finally:
-        if 'connection' in locals() and connection.is_connected():
+        try:
             cursor.close()
             connection.close()
-
+        except:
+            pass
     return redirect(url_for('index'))
 
 @app.route('/eliminar_registro', methods=['POST'])
@@ -514,11 +553,11 @@ def eliminar_registro():
     id_registro = request.form['delete-element-id']
     id_columna = obtener_nombre_columnas(tabla)[0]
     try:
-        connection = mysql.connector.connect(**DB_CONFIG)
+        connection = get_connection()
         cursor = connection.cursor()
 
-        query = f"DELETE FROM {tabla} WHERE {id_columna} = {id_registro};"
-        cursor.execute(query)
+        query = f"DELETE FROM [{tabla}] WHERE [{id_columna}] = ?;"
+        cursor.execute(query, (id_registro,))
 
         #actualizar historial de cambios
         valores_historial = ['Eliminar registro', f'{tabla}', id_registro, None]
@@ -529,10 +568,11 @@ def eliminar_registro():
     except Exception as e:
         flash(f'Error al eliminar registro: {e}')
     finally:
-        if 'connection' in locals() and connection.is_connected():
+        try:
             cursor.close()
             connection.close()
-
+        except:
+            pass
     return redirect(url_for('index'))
 
 @app.route('/actualizar_registro', methods=['POST'])
@@ -551,12 +591,13 @@ def actualizar_registro():
     id_registro = request.form['update-element-id']
     id_columna = obtener_nombre_columnas(tabla)[0]
     try:
-        connection = mysql.connector.connect(**DB_CONFIG)
+        connection = get_connection()
         cursor = connection.cursor()
 
-        sets = ', '.join([f"`{col}` = %s" for col in columnas_actualizadas])
-        query = f"UPDATE {tabla} SET {sets} WHERE {id_columna} = {id_registro};"
-        cursor.execute(query, tuple(valores_actualizados))
+        sets = ', '.join([f"[{col}] = ?" for col in columnas_actualizadas])
+        query = f"UPDATE [{tabla}] SET {sets} WHERE [{id_columna}] = ?;"
+        parametros = tuple(valores_actualizados) + (id_registro,)
+        cursor.execute(query, parametros)
         
         #actualizar historial de cambios
         valores_historial = ['Actualizar registro', f'{tabla}', id_registro, f'{tuple(columnas_actualizadas)}']
@@ -567,13 +608,12 @@ def actualizar_registro():
     except Exception as e:
         flash(f'Error al actualizar registro: {e}')
     finally:
-        if 'connection' in locals() and connection.is_connected():
+        try:
             cursor.close()
             connection.close()
-
+        except:
+            pass
     return redirect(url_for('index'))
-
-
 
 if __name__ == '__main__':
     port = 5000

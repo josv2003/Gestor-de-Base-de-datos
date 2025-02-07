@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados</title>
+    <link rel="stylesheet" href="{{url_for('static', filename='style.css')}}">
+</head>
+<body>
+    <h1>Resultados de la búsqueda</h1>
+    <table>
+        <tr>
+            {% for columna in columnas %}
+                <th>{{ columna.replace("_", " ") }}</th>
+            {% endfor %}
+        </tr>
+        {% for row in results %}
+        <tr>
+            {% for columna in columnas %}
+                <td>{{ row[columna] }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </table>
+    <form action="{{url_for('download_search')}}" method="post">
+        <input type="hidden" name="selected_table" value="{{search_params.selected_table}}">
+        <button type="submit">Descargar resultados en Excel</button>
+    </form>
+    <a href="{{url_for('index')}}">Volver</a>
+
+</body>
+</html>

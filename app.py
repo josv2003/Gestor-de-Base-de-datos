@@ -619,4 +619,4 @@ if __name__ == '__main__':
     port = 5000
     url =f"http://127.0.0.1:{port}"
     webbrowser.open(url)
-    app.run(debug=True, port=port)
+    app.run(debug=False, port=port)

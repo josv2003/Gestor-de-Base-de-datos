@@ -30,8 +30,8 @@ DB_CONFIG = {
     'DRIVER': '{SQL Server}',
     'SERVER': 'SRVSAP01',    #nombre o IP del servidor
     'DATABASE': 'idea_db',      #nombre base de datos
-    'UID': 'TERMODINAMICA\sap-admin',        #Usuario de SQL Server
-    'PWD': 'tu_contraseña'      #Contraseña
+    'UID': 'sa',        #Usuario de SQL Server
+    'PWD': 'Seidor2015'      #Contraseña
 }
 
 def get_connection():

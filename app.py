@@ -4,6 +4,7 @@ from flask_session import Session
 from datetime import datetime
 from functools import wraps
 from io import BytesIO
+from threading import Timer
 import pandas as pd
 import pyodbc
 import json
@@ -615,8 +616,11 @@ def actualizar_registro():
             pass
     return redirect(url_for('index'))
 
+def open_browser():
+    url =f"http://127.0.0.1:{port}"
+    webbrowser.open_new(url)
+
 if __name__ == '__main__':
     port = 5000
-    url =f"http://127.0.0.1:{port}"
-    webbrowser.open(url)
-    app.run(debug=False, port=port)
+    Timer(1, open_browser).start()  # Abre el navegador después de 1 segundo
+    app.run(debug=False, port=port, use_reloader=False)

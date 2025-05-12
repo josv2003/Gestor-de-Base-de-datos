@@ -1,3 +1,0 @@
-([('miApp',
-   '/Users/johannasv/Downloads/Gestor-de-Base-de-datos-Mac/dist/miApp',
-   'EXECUTABLE')],)

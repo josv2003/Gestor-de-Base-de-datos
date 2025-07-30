@@ -7,7 +7,7 @@ DATA_FILES = [
     ('static', ['static/'+ f for f in os.listdir('static')])
 ]
 OPTIONS = {
-    'argv_emulation': True,
+    'argv_emulation': False,
     'packages': ['flask', 'flask_login', 'flask_session', 'pandas', 'pyodbc', 'zlib'],
     'excludes': ['tkinter'],
     'plist': {

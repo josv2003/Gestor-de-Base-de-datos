@@ -15,7 +15,7 @@ OPTIONS = {
         'CFBundleShortVersionString': '1.0.0',
         'CFBundleIdentifier': 'com.idea.gestordb',
     },
-    'skip_archives': True,
+    'skip_archive': True,
     'zipfile': None,
 }
 

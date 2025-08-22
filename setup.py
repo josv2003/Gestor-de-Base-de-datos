@@ -9,7 +9,15 @@ DATA_FILES = [
 OPTIONS = {
     'argv_emulation': False,
     'packages': ['flask', 'flask_login', 'flask_session', 'pandas', 'pyodbc', 'zlib'],
-    'excludes': ['tkinter'],
+    'iconfile': 'IconDB.icns',
+    'includes': [
+        'datetime',
+        'functools',
+        'io',
+        'threading',
+        'json',
+        'webbrowser',
+    ],
     'plist': {
         'CFBundleName': 'GestorDB',
         'CFBundleShortVersionString': '1.0.0',
